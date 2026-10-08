@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentBank · Multi-agent banking assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EEF2EF;
+    --panel: #FFFFFF;
+    --ink: #14302A;
+    --ink-soft: #4A615A;
+    --rule: #CFD9D3;
+    --supervisor: #B07A00;
+    --customer: #1E6B73;
+    --fraud: #B23A2E;
+    --loan: #5B4A9E;
+    --error: #9F1D1D;
+    --radius-lg: 14px;
+    --radius-sm: 6px;
+    --sans: "Schibsted Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--sans); color: var(--ink); background: var(--paper);
+    font-size: 15px; line-height: 1.5; font-variant-numeric: tabular-nums;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--customer); outline-offset: 2px; }
+
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr) 380px; grid-template-rows: minmax(0, 1fr); height: 100vh; overflow: hidden; }
+  .side, .chat, .activity { min-height: 0; }
+
+  /* ---------- left: persona + use cases */
+  .side { border-right: 1px solid var(--rule); padding: 20px 18px; overflow-y: auto; }
+  .brand { display: flex; align-items: baseline; gap: 8px; margin-bottom: 22px; }
+  .brand h1 { font-size: 22px; letter-spacing: -0.02em; margin: 0; font-weight: 700; }
+  .brand span { color: var(--ink-soft); font-size: 13px; white-space: nowrap; }
+  .side h2 { font-size: 13px; font-weight: 600; color: var(--ink-soft); margin: 22px 0 8px; }
+  .persona select {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--rule); border-radius: var(--radius-sm);
+    background: var(--panel); font: inherit; color: var(--ink);
+  }
+  .persona .meta { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+  .persona .acct { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+  .group { margin-bottom: 14px; }
+  .group-name { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .prompt {
+    display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: var(--radius-sm);
+    padding: 6px 8px; font-size: 13.5px; color: var(--ink);
+  }
+  .prompt:hover { background: rgba(20,48,42,.06); }
+  .prompt small { display: block; color: var(--ink-soft); font-size: 12px; }
+
+  /* ---------- center: chat */
+  .chat { display: flex; flex-direction: column; min-width: 0; }
+  .chat-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 14px 24px; border-bottom: 1px solid var(--rule);
+  }
+  .chat-head .who { font-weight: 600; }
+  .chat-head .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .chat-head .model { font-size: 12.5px; color: var(--ink-soft); }
+  .ghost { background: none; border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 5px 10px; font-size: 13px; }
+  .ghost:hover { border-color: var(--ink-soft); }
+  .messages { flex: 1; overflow-y: auto; padding: 24px; }
+  .thread { max-width: 760px; margin: 0 auto; }
+  .empty { color: var(--ink-soft); padding: 40px 0; }
+  .empty p { margin: 0 0 6px; max-width: 60ch; }
+  .empty strong { color: var(--ink); font-size: 20px; display: block; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .msg { margin-bottom: 20px; }
+  .msg.user { display: flex; justify-content: flex-end; }
+  .msg.user .bubble { background: var(--ink); color: #F4F7F5; border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg); max-width: 75%; padding: 10px 14px; white-space: pre-wrap; }
+  .msg.bot .bubble { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px var(--radius-lg) var(--radius-lg) var(--radius-lg); padding: 14px 16px; }
+  .msg.bot.error .bubble { border-color: var(--error); color: var(--error); }
+  .handled { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; font-weight: 600; color: #fff; }
+  .bubble p { margin: 0 0 8px; } .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { margin: 4px 0 8px; padding-left: 20px; }
+  .bubble h3, .bubble h4 { margin: 10px 0 6px; font-size: 15px; }
+  .bubble code { font-family: var(--mono); font-size: 12.5px; background: rgba(20,48,42,.06); padding: 1px 4px; border-radius: 4px; }
+  .bubble pre { background: #F5F8F6; border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 10px; overflow-x: auto; max-height: 340px; }
+  .bubble pre code { background: none; padding: 0; }
+  .bubble table { border-collapse: collapse; margin: 6px 0 10px; font-size: 13.5px; display: block; overflow-x: auto; }
+  .bubble th, .bubble td { border-bottom: 1px solid var(--rule); padding: 5px 10px 5px 0; text-align: left; }
+  .typing { color: var(--ink-soft); font-size: 13.5px; }
+  .typing::after { content: "…"; animation: blink 1s steps(3) infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  .composer { border-top: 1px solid var(--rule); padding: 14px 24px; }
+  .composer form { display: flex; gap: 10px; max-width: 760px; margin: 0 auto; }
+  .composer textarea {
+    flex: 1; resize: none; border: 1px solid var(--rule); border-radius: var(--radius-lg); padding: 11px 14px;
+    font: inherit; color: var(--ink); background: var(--panel); min-height: 46px; max-height: 140px;
+  }
+  .send { background: var(--ink); color: #fff; border: 0; border-radius: var(--radius-lg); padding: 0 20px; font-weight: 600; }
+  .send:disabled { opacity: .5; cursor: wait; }
+
+  /* ---------- right: agent activity timeline (the signature element) */
+  .activity { border-left: 1px solid var(--rule); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .activity-head { padding: 16px 20px 10px; border-bottom: 1px solid var(--rule); }
+  .activity-head h2 { margin: 0; font-size: 16px; }
+  .activity-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-soft); }
+  .lanes { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
+  .lanes span { display: inline-flex; align-items: center; gap: 5px; }
+  .timeline { flex: 1; overflow-y: auto; padding: 16px 20px 24px; }
+  .timeline .placeholder { color: var(--ink-soft); font-size: 13.5px; }
+  .turn-label { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 10px; }
+  .steps { list-style: none; margin: 0 0 22px; padding: 0; position: relative; }
+  .steps::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--rule); }
+  .step { position: relative; padding: 0 0 12px 26px; }
+  .step .node { position: absolute; left: 0; top: 3px; width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--panel); }
+  .step.tool .node { width: 10px; height: 10px; left: 3px; top: 6px; border: 0; }
+  .step-title { font-size: 13.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .step-title time { font-weight: 400; color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+  .step-sub { font-size: 12.5px; color: var(--ink-soft); }
+  .step.tool .step-title { font-family: var(--mono); font-weight: 500; font-size: 12.5px; }
+  .step.err .step-title { color: var(--error); }
+  .step details { margin-top: 3px; }
+  .step summary { font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+  .step pre { font-family: var(--mono); font-size: 11.5px; background: #F5F8F6; border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 8px; overflow-x: auto; max-height: 260px; margin: 4px 0 0; }
+  .activity-toggle { display: none; }
+
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: 240px minmax(0, 1fr); }
+    .activity { position: fixed; inset: 0 0 0 auto; width: min(400px, 92vw); transform: translateX(100%); transition: transform .2s; z-index: 10; box-shadow: -8px 0 30px rgba(20,48,42,.15); }
+    .activity.open { transform: none; }
+    .activity-toggle { display: inline-block; }
+  }
+  @media (max-width: 720px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100vh; overflow: visible; }
+    .side { border-right: 0; border-bottom: 1px solid var(--rule); max-height: 44vh; }
+    .chat { min-height: 56vh; }
+    .messages, .composer, .chat-head { padding-left: 14px; padding-right: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><h1>AgentBank</h1><span>multi-agent demo</span></div>
+
+    <div class="persona">
+      <h2>Signed in as</h2>
+      <select id="customer" aria-label="Demo customer"></select>
+      <div class="meta" id="customerMeta"></div>
+    </div>
+
+    <h2>Try a use case</h2>
+    <div id="useCases"></div>
+  </aside>
+
+  <main class="chat">
+    <div class="chat-head">
+      <div>
+        <div class="who" id="who">Assistant</div>
+        <div class="model" id="model">Connecting…</div>
+      </div>
+      <div class="actions">
+        <button class="ghost activity-toggle" id="toggleActivity">Agent activity</button>
+        <button class="ghost" id="reset">New conversation</button>
+      </div>
+    </div>
+    <div class="messages" id="messages"><div class="thread" id="thread"></div></div>
+    <div class="composer">
+      <form id="form">
+        <textarea id="input" rows="1" placeholder="Ask about balances, a suspicious charge, a loan…" aria-label="Message"></textarea>
+        <button class="send" id="send" type="submit">Send</button>
+      </form>
+    </div>
+  </main>
+
+  <aside class="activity" id="activity">
+    <div class="activity-head">
+      <h2>Agent activity</h2>
+      <p>How the Supervisor routed each message, and every banking API the agents called.</p>
+      <div class="lanes">
+        <span><i class="dot" style="background:var(--supervisor)"></i>Supervisor</span>
+        <span><i class="dot" style="background:var(--customer)"></i>Customer Service</span>
+        <span><i class="dot" style="background:var(--fraud)"></i>Fraud &amp; Risk</span>
+        <span><i class="dot" style="background:var(--loan)"></i>Credit &amp; Loans</span>
+      </div>
+    </div>
+    <div class="timeline" id="timeline"><p class="placeholder">Send a message to see the agents work.</p></div>
+  </aside>
+</div>
+
+<script>
+const AGENT = {
+  SUPERVISOR:       { label: "Supervisor",       color: "var(--supervisor)" },
+  CUSTOMER_SERVICE: { label: "Customer Service", color: "var(--customer)" },
+  FRAUD_RISK:       { label: "Fraud & Risk",     color: "var(--fraud)" },
+  CREDIT_LOAN:      { label: "Credit & Loans",   color: "var(--loan)" }
+};
+
+const USE_CASES = {
+  CUST1001: [
+    ["CUSTOMER_SERVICE", "What's my account balance?", "Balance enquiry"],
+    ["CUSTOMER_SERVICE", "Where did I spend the most this month?", "Spending insights"],
+    ["FRAUD_RISK", "I see a charge I don't recognise. Is my account safe?", "Fraud scan"],
+    ["FRAUD_RISK", "I didn't make the Dubai purchase. Block my card and raise a dispute.", "Block card + dispute"],
+    ["CUSTOMER_SERVICE", "Send ₹5,000 to Amma", "Transfer with confirmation"],
+    ["CUSTOMER_SERVICE", "Transfer ₹1,20,000 to ACC99887766", "Risky transfer gets held"],
+    ["CREDIT_LOAN", "Am I eligible for a ₹5 lakh personal loan for 3 years?", "Loan eligibility"],
+    ["MULTI", "There's a suspicious debit on my card, and can I still get a ₹6 lakh car loan?", "Two agents, one answer"]
+  ],
+  CUST1002: [
+    ["CREDIT_LOAN", "Can I get a ₹10 lakh personal loan for 3 years?", "Declined with alternatives"],
+    ["CREDIT_LOAN", "What's the status of my loan application?", "Application status"],
+    ["CUSTOMER_SERVICE", "Show my last 5 transactions", "Transaction history"],
+    ["FRAUD_RISK", "Is there anything unusual on my account?", "Clean fraud scan"]
+  ],
+  CUST1003: [
+    ["CREDIT_LOAN", "What's my credit score?", "Credit profile"],
+    ["CREDIT_LOAN", "Calculate EMI for a ₹2 lakh education loan for 2 years", "EMI calculator"],
+    ["CUSTOMER_SERVICE", "Send ₹50,000 to ACC12345678", "Insufficient funds"],
+    ["FRAUD_RISK", "Is my Udemy payment in USD risky?", "Medium-risk explanation"]
+  ]
+};
+
+const $ = id => document.getElementById(id);
+const state = { customers: [], customerId: null, sessionId: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), busy: false, turn: 0 };
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const inr = n => "₹" + Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/* Small, safe markdown renderer: escapes HTML first, then formats code, tables, lists, bold, italics. */
+function md(src) {
+  const blocks = [];
+  let text = esc(src).replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, code) => { blocks.push(`<pre><code>${code.trim()}</code></pre>`); return `\u0000${blocks.length - 1}\u0000`; });
+  const inline = s => s.replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?]|$)/g, "$1<em>$2</em>")
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?]|$)/g, "$1<em>$2</em>");
+  const out = []; let list = null; let table = [];
+  const flushList = () => { if (list) { out.push(`<${list.type}>${list.items.map(i => `<li>${inline(i)}</li>`).join("")}</${list.type}>`); list = null; } };
+  const flushTable = () => {
+    if (!table.length) return;
+    const rows = table.filter(r => !/^\|?\s*:?-{2,}/.test(r)).map(r => r.replace(/^\||\|$/g, "").split("|").map(c => inline(c.trim())));
+    out.push("<table>" + rows.map((r, i) => "<tr>" + r.map(c => i === 0 ? `<th>${c}</th>` : `<td>${c}</td>`).join("") + "</tr>").join("") + "</table>");
+    table = [];
+  };
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (/^\|.*\|$/.test(t)) { flushList(); table.push(t); continue; } else flushTable();
+    let m;
+    if ((m = t.match(/^[-*•]\s+(.*)/))) { if (!list || list.type !== "ul") { flushList(); list = { type: "ul", items: [] }; } list.items.push(m[1]); continue; }
+    if ((m = t.match(/^\d+[.)]\s+(.*)/))) { if (!list || list.type !== "ol") { flushList(); list = { type: "ol", items: [] }; } list.items.push(m[1]); continue; }
+    flushList();
+    if (!t) continue;
+    if ((m = t.match(/^#{1,4}\s+(.*)/))) { out.push(`<h4>${inline(m[1])}</h4>`); continue; }
+    if (/^\u0000\d+\u0000$/.test(t)) { out.push(t); continue; }
+    out.push(`<p>${inline(t)}</p>`);
+  }
+  flushList(); flushTable();
+  return out.join("").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
+}
+
+/* ---------- persona & use cases */
+async function loadCustomers() {
+  const [customers, meta] = await Promise.all([fetch("/api/customers").then(r => r.json()), fetch("/api/meta").then(r => r.json())]);
+  state.customers = customers;
+  $("model").textContent = "Model: " + meta.model;
+  $("customer").innerHTML = customers.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+  selectCustomer(customers[0].id);
+}
+
+function selectCustomer(id) {
+  state.customerId = id;
+  const c = state.customers.find(x => x.id === id);
+  $("customer").value = id;
+  $("who").textContent = `Chatting as ${c.name}`;
+  $("customerMeta").innerHTML = `${esc(c.segment)}, ${esc(c.city)}` +
+    c.accounts.map(a => `<div class="acct"><span>${esc(a.type.replace("_", " ").toLowerCase())} ${esc(a.account_number.slice(-4))}</span><span>${inr(a.balance)}</span></div>`).join("");
+  $("useCases").innerHTML = groupUseCases(USE_CASES[id] || []);
+  resetView();
+}
+
+function groupUseCases(list) {
+  const groups = {};
+  list.forEach(([agent, prompt, label]) => (groups[agent] ||= []).push([prompt, label]));
+  return Object.entries(groups).map(([agent, items]) => {
+    const info = AGENT[agent] || { label: "Several agents", color: "var(--ink)" };
+    return `<div class="group"><div class="group-name"><i class="dot" style="background:${info.color}"></i>${info.label}</div>` +
+      items.map(([p, l]) => `<button class="prompt" data-prompt="${esc(p)}">${esc(l)}<small>${esc(p)}</small></button>`).join("") + "</div>";
+  }).join("");
+}
+
+function resetView() {
+  state.turn = 0;
+  $("thread").innerHTML = `<div class="empty"><strong>How can I help today?</strong>
+    <p>A Supervisor agent reads each message and hands it to the right specialist: Customer Service, Fraud &amp; Risk, or Credit &amp; Loans.</p>
+    <p>Pick a use case on the left or type your own question. The panel on the right shows each step.</p></div>`;
+  $("timeline").innerHTML = `<p class="placeholder">Send a message to see the agents work.</p>`;
+}
+
+/* ---------- chat */
+function addMessage(role, html, extraClass = "") {
+  const empty = $("thread").querySelector(".empty"); if (empty) empty.remove();
+  const el = document.createElement("div");
+  el.className = `msg ${role} ${extraClass}`;
+  el.innerHTML = html;
+  $("thread").appendChild(el);
+  $("messages").scrollTop = $("messages").scrollHeight;
+  return el;
+}
+
+async function send(message) {
+  if (state.busy || !message.trim()) return;
+  state.busy = true; $("send").disabled = true;
+  addMessage("user", `<div class="bubble">${esc(message)}</div>`);
+  const pending = addMessage("bot", `<div class="typing">Supervisor is routing your request</div>`);
+  try {
+    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: state.sessionId, customer_id: state.customerId, message }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    const chips = data.agents.length
+      ? `Handled by ${data.agents.map(a => `<span class="chip" style="background:${AGENT[a].color}">${AGENT[a].label}</span>`).join(" ")}`
+      : `<span class="chip" style="background:var(--supervisor)">Supervisor</span>`;
+    pending.innerHTML = `<div class="handled">${chips}<span>${(data.elapsed_ms / 1000).toFixed(1)}s</span></div><div class="bubble">${md(data.reply)}</div>`;
+    renderTrace(message, data.trace);
+  } catch (e) {
+    pending.classList.add("error");
+    pending.innerHTML = `<div class="bubble">${esc(e.message)}. Check that the server is running and the LLM settings in the README are correct.</div>`;
+  } finally {
+    state.busy = false; $("send").disabled = false; $("input").focus();
+    $("messages").scrollTop = $("messages").scrollHeight;
+  }
+}
+
+function renderTrace(message, events) {
+  state.turn++;
+  const placeholder = $("timeline").querySelector(".placeholder"); if (placeholder) placeholder.remove();
+  const shown = events.filter(e => ["ROUTE", "AGENT_START", "THOUGHT", "TOOL_CALL", "TOOL_RESULT", "TOOL_ERROR", "SYNTHESIS", "AGENT_RESPONSE"].includes(e.type));
+  const items = [];
+  for (let i = 0; i < shown.length; i++) {
+    const e = shown[i], a = AGENT[e.agent] || AGENT.SUPERVISOR;
+    const time = `<time>${(e.elapsed_ms / 1000).toFixed(1)}s</time>`;
+    if (e.type === "TOOL_CALL") {
+      const result = shown[i + 1] && shown[i + 1].type.startsWith("TOOL_") && shown[i + 1].type !== "TOOL_CALL" ? shown[++i] : null;
+      const err = result && result.type === "TOOL_ERROR";
+      items.push(`<li class="step tool ${err ? "err" : ""}"><span class="node" style="background:${a.color}"></span>
+        <div class="step-title"><span>${esc(e.title)}()</span>${time}</div>
+        <details><summary>${err ? "Returned an error" : "Arguments and response"}</summary>
+        <pre>${esc(JSON.stringify(e.detail, null, 2))}</pre>${result ? `<pre>${esc(JSON.stringify(result.detail, null, 2))}</pre>` : ""}</details></li>`);
+    } else if (e.type === "ROUTE") {
+      items.push(`<li class="step"><span class="node" style="background:${a.color}"></span>
+        <div class="step-title"><span>${esc(e.title)}</span>${time}</div>
+        <div class="step-sub">${esc(e.detail.reason || "")}${e.detail.note ? " · " + esc(e.detail.note) : ""}</div></li>`);
+    } else if (e.type === "AGENT_START") {
+      items.push(`<li class="step"><span class="node" style="background:${a.color}"></span>
+        <div class="step-title"><span>${esc(a.label)} agent</span>${time}</div>
+        <div class="step-sub">Allowed tools: ${esc((e.detail.tools || []).join(", "))}</div></li>`);
+    } else if (e.type === "THOUGHT") {
+      items.push(`<li class="step tool"><span class="node" style="background:${a.color}"></span><div class="step-sub">${esc(e.detail.text)}</div></li>`);
+    } else if (e.type === "SYNTHESIS") {
+      items.push(`<li class="step"><span class="node" style="background:${a.color}"></span>
+        <div class="step-title"><span>Supervisor merged the answers</span>${time}</div></li>`);
+    }
+  }
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<p class="turn-label">Message ${state.turn}: “${esc(message.length > 60 ? message.slice(0, 60) + "…" : message)}”</p><ol class="steps">${items.join("")}</ol>`;
+  $("timeline").appendChild(wrap);
+  $("timeline").scrollTop = $("timeline").scrollHeight;
+}
+
+/* ---------- events */
+$("form").addEventListener("submit", e => { e.preventDefault(); const v = $("input").value; $("input").value = ""; send(v); });
+$("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); } });
+$("useCases").addEventListener("click", e => { const b = e.target.closest(".prompt"); if (b) send(b.dataset.prompt); });
+$("customer").addEventListener("change", e => selectCustomer(e.target.value));
+$("reset").addEventListener("click", async () => {
+  await fetch("/api/chat/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: state.sessionId, customer_id: state.customerId }) });
+  resetView();
+});
+$("toggleActivity").addEventListener("click", () => $("activity").classList.toggle("open"));
+
+loadCustomers().catch(() => { $("model").textContent = "Server not reachable"; });
+</script>
+</body>
+</html>
